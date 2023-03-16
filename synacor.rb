@@ -8,112 +8,134 @@
 # [ ] ?
 # [ ] ?
 
-prog = File.read("challenge.bin").unpack("S*")
+class VM
+  attr_accessor :prog
+  attr_accessor :ip
 
-ip = 0
+  def initialize
+    @prog = File.read("challenge.bin").unpack("S*")
 
-@reg = [0, 0, 0, 0, 0, 0, 0, 0]
-@stack = []
-@input = []
+    @ip = 0
+    @reg = [0, 0, 0, 0, 0, 0, 0, 0]
+    @stack = []
+    @input = []
+  end
 
-def value(num)
-  return num if num <= 32767
-  return @reg[num - 32768] if num < 32776
-  raise "Invalid number #{num}"
-end
+  def op = prog[ip]
 
-def write(num, val)
-  raise "expected register reference, got literal `a` #{num}" if num < 32768
-  @reg[num - 32768] = val % 32768
-end
+  def a = value(1)
 
-loop do
-  op = prog[ip]
-  case op
-  when 0 # halt
-    ip += 1
-    break
-  when 1 # set a b
-    write(prog[ip + 1], value(prog[ip + 2]))
-    ip += 3
-  when 2 # push a
-    @stack.push(value(prog[ip + 1]))
-    ip += 2
-  when 3 # pop a
-    write(prog[ip + 1], @stack.pop)
-    ip += 2
-  when 4 # eq a b c
-    if value(prog[ip + 2]) == value(prog[ip + 3])
-      write(prog[ip + 1], 1)
-    else
-      write(prog[ip + 1], 0)
+  def b = value(2)
+
+  def c = value(3)
+
+  def push(data) = @stack.push(data)
+
+  def pop = @stack.pop
+
+  def value(i)
+    num = prog[ip + i]
+    return num if num <= 32767
+    return @reg[num - 32768] if num < 32776
+    raise "Invalid number #{num}"
+  end
+
+  def write_a(val)
+    num = prog[ip + 1]
+    raise "expected register reference, got literal `a` #{num}" if num < 32768
+    @reg[num - 32768] = val % 32768
+  end
+
+  def run
+    loop do
+      case op
+      when 0 # halt
+        break
+      when 1 # set a b
+        write_a(b)
+        @ip += 3
+      when 2 # push a
+        push(a)
+        @ip += 2
+      when 3 # pop a
+        write_a(pop)
+        @ip += 2
+      when 4 # eq a b c
+        if b == c
+          write_a(1)
+        else
+          write_a(0)
+        end
+        @ip += 4
+      when 5 # gt a b c
+        if b > c
+          write_a(1)
+        else
+          write_a(0)
+        end
+        @ip += 4
+      when 6 # jmp a
+        @ip = a
+      when 7 # jt a b
+        if a > 0
+          @ip = b
+        else
+          @ip += 3
+        end
+      when 8 # jf a b
+        if a == 0
+          @ip = b
+        else
+          @ip += 3
+        end
+      when 9 # add a b c
+        write_a(b + c)
+        @ip += 4
+      when 10 # mult a b c
+        write_a(b * c)
+        @ip += 4
+      when 11 # mod a b c
+        write_a(b % c)
+        @ip += 4
+      when 12 # and a b c
+        write_a(b & c)
+        @ip += 4
+      when 13 # or a b c
+        write_a(b | c)
+        @ip += 4
+      when 14 # not a b
+        write_a(~b)
+        @ip += 3
+      when 15 # rmem a b
+        write_a(prog[b])
+        @ip += 3
+      when 16 # wmem a b
+        prog[a] = b
+        @ip += 3
+      when 17 # call a
+        push(ip + 2)
+        @ip = a
+      when 18 # ret
+        break if @stack.empty?
+        @ip = pop
+      when 19 # out a
+        print a.chr
+        @ip += 2
+      when 20 # in a
+        @input = gets.bytes if @input.empty?
+        write_a(@input.shift)
+        @ip += 2
+      when 21 # noop
+        @ip += 1
+      else
+        puts
+        puts "!! Unknown opcode: #{op}"
+        break
+      end
     end
-    ip += 4
-  when 5 # gt a b c
-    if value(prog[ip + 2]) > value(prog[ip + 3])
-      write(prog[ip + 1], 1)
-    else
-      write(prog[ip + 1], 0)
-    end
-    ip += 4
-  when 6 # jmp a
-    ip = value(prog[ip + 1])
-  when 7 # jt a b
-    if value(prog[ip + 1]) > 0
-      ip = value(prog[ip + 2])
-    else
-      ip += 3
-    end
-  when 8 # jf a b
-    if value(prog[ip + 1]) == 0
-      ip = value(prog[ip + 2])
-    else
-      ip += 3
-    end
-  when 9 # add a b c
-    write(prog[ip + 1], value(prog[ip + 2]) + value(prog[ip + 3]))
-    ip += 4
-  when 10 # mult a b c
-    write(prog[ip + 1], value(prog[ip + 2]) * value(prog[ip + 3]))
-    ip += 4
-  when 11 # mod a b c
-    write(prog[ip + 1], value(prog[ip + 2]) % value(prog[ip + 3]))
-    ip += 4
-  when 12 # and a b c
-    write(prog[ip + 1], value(prog[ip + 2]) & value(prog[ip + 3]))
-    ip += 4
-  when 13 # or a b c
-    write(prog[ip + 1], value(prog[ip + 2]) | value(prog[ip + 3]))
-    ip += 4
-  when 14 # not a b
-    write(prog[ip + 1], ~value(prog[ip + 2]))
-    ip += 3
-  when 15 # rmem a b
-    write(prog[ip + 1], prog[value(prog[ip + 2])])
-    ip += 3
-  when 16 # wmem a b
-    prog[value(prog[ip + 1])] = value(prog[ip + 2])
-    ip += 3
-  when 17 # call a
-    @stack.push(ip + 2)
-    ip = value(prog[ip + 1])
-  when 18 # ret
-    break if @stack.empty?
-    ip = @stack.pop
-  when 19 # out a
-    print value(prog[ip + 1]).chr
-    ip += 2
-  when 20 # in a
-    @input = gets.bytes if @input.empty?
-    write(prog[ip + 1], @input.shift)
-    ip += 2
-  when 21 # noop
-    ip += 1
-  else
+
     puts
-    puts "!! Unknown opcode: #{op}"
-    break
   end
 end
 
-puts
+VM.new.run
